@@ -4,5 +4,5 @@ Python version: 3.12.0
 
 Group:
     - Ryan Aidan (A0218327E)
-    - Member 2 ()
+    - Timothy Chia (A0255343H)
     - Member 3 ()
