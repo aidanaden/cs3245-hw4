@@ -48,6 +48,7 @@ def process_to_tokens(text):
                 continue
             token = p_stemmer.stem(token) # Apply stemming
             token = token.lower() # Case-folding
+            token = re.sub(r'^[0-9,]+$', '', token) # Apply number removal
             if token in stop_words: # Apply stopword removal
                 continue
 
