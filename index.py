@@ -44,18 +44,11 @@ def process_to_tokens(text):
         tokens = nltk.word_tokenize(sentence)
 
         for token in tokens:
-            # Remove punctuation tokens
-            if all(char in punctuation_chars for char in token):
+            if all(char in punctuation_chars for char in token): # Remove punctuation tokens
                 continue
-
-            # Apply stemming
-            token = p_stemmer.stem(token)
-
-            # Case-folding
-            token = token.lower()
-
-            # Apply stopword removal
-            if token in stop_words:
+            token = p_stemmer.stem(token) # Apply stemming
+            token = token.lower() # Case-folding
+            if token in stop_words: # Apply stopword removal
                 continue
 
             # Update token count
@@ -85,8 +78,6 @@ def build_index(in_dir, out_dict, out_postings):
     for entry in corpus:
         doc = Doc(entry[0], entry[1], entry[2], entry[3], entry[4])
         tokens = process_to_tokens(doc.content)
-        
-    
 
 
 input_directory = output_file_dictionary = output_file_postings = None
