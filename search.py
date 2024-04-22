@@ -27,7 +27,7 @@ def process_to_tokens(line):
     
     processed_tokens = {}
     for token in nltk.word_tokenize(line):
-        token = re.sub(r'\d+', '', token) # Apply number removal
+        token = re.sub(r'^[0-9,]+$', '', token) # Apply number removal
         if all(char in punctuation_chars for char in token): # Remove punctuation tokens
             continue
         token = p_stemmer.stem(token) # Apply stemming
