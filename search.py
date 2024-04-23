@@ -114,31 +114,40 @@ def tokenize_terms(terms):
     res = []
     for x in terms:
         # TODO: follow index steming
-        if x not in res:
-            res.append(x)
+        res.append(x)
         
     return res
 
 # get td-idf of query, cosine normalized
 # return map{ word: td-idf }
 def get_query_weights(terms, dictionary):
-    weights = {}
+    query_weights = {}
     collection_size = get_collection_size()
     normalize = 0
-    for term in terms: # tf = 1 as no repeated terms in query
-        idf = 0
+
+    term_counts = {}
+    for term in terms:
+        if term not in term_counts:
+            term_counts[term] = 0
+        term_counts[term] += 1
+
+    for term, count in term_counts.keys():
+        tf = 1 + math.log10(count)
         if term in dictionary:
             idf = math.log10(collection_size / dictionary[term])
+        else:
+            idf = 0
 
-        weights[term] = idf
-        normalize += idf * idf
+        tf_idf = tf * idf
+        query_weights[term] = tf_idf
+        normalize += tf_idf * tf_idf
 
     if normalize > 0:
-        normalize = sqrt(normalize)
-        for term in weights:
-            weights[term] /= normalize
+        normalize = math.sqrt(normalize)
+        for term in query_weights:
+            query_weights[term] /= normalize
 
-    return weights
+    return query_weights
 
 # get td-idf document scores
 # return map{ doc: score }
