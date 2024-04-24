@@ -28,64 +28,51 @@ class Doc:
 def process_to_tokens(text, zone):
     p_stemmer = PorterStemmer()
     stop_words = set(stopwords.words("english"))
-    punctuation_chars = set(string.punctuation)
 
-    text = re.sub(r'^[0-9,]+$', '', text)
     # Tokenize the text into words
-    words = nltk.word_tokenize(text)
-    
-    # apply stemming to words
-    words = [p_stemmer.stem(word) for word in words]
-    # apply stopword removal
-    words = [word for word in words if word not in stop_words]
-    # apply punctuation removal
-    words = [word for word in words if word not in punctuation_chars]
-    # apply case folding
-    words = [word.lower() for word in words]
-    # apply number removal
-    words = [word for word in words if not any(char.isdigit() for char in word)]
-    
     processed_tokens = {}
-    for token in words:
-        if token not in processed_tokens:
-            processed_tokens[(token, zone)] = 1
-        else:
-            processed_tokens[(token, zone)] += 1
+    for sentence in nltk.sent_tokenize(text):
+        words = nltk.word_tokenize(sentence)
+
+        # Process each word
+        for word in words:
+            # Apply stemming
+            word = p_stemmer.stem(word)
+            # Remove punctuation and convert to lowercase
+            word = ''.join(char.lower() for char in word if char.isalpha())
+
+            # Skip stop words and empty words
+            if word and word not in stop_words:
+                processed_tokens[(word, zone)] = processed_tokens.get((word, zone), 0) + 1
 
     return processed_tokens
 
 def process_to_biwords(text, zone):
     p_stemmer = PorterStemmer()
     stop_words = set(stopwords.words("english"))
-    punctuation_chars = set(string.punctuation)
 
-    text = re.sub(r'^[0-9,]+$', '', text)
     # Tokenize the text into words
-    words = nltk.word_tokenize(text)
-    
-    # apply stemming to words
-    words = [p_stemmer.stem(word) for word in words]
-    # apply stopword removal
-    words = [word for word in words if word not in stop_words]
-    # apply punctuation removal
-    words = [word for word in words if word not in punctuation_chars]
-    # apply case folding
-    words = [word.lower() for word in words]
-    # apply number removal
-    words = [word for word in words if not any(char.isdigit() for char in word)]
-    
     processed_biwords = {}
-    for i in range(len(words) - 1):
-        word1 = words[i]
-        word2 = words[i + 1]
+    for sentence in nltk.sent_tokenize(text):
+        words = nltk.word_tokenize(sentence)
 
-        # Combine consecutive words into biwords
-        biword = word1 + " " + word2
+        # Process each word
+        for i in range(len(words) - 1):
+            word1 = words[i]
+            word2 = words[i + 1]
 
-        if biword not in processed_biwords:
-            processed_biwords[(biword, zone)] = 1
-        else:
-            processed_biwords[(biword, zone)] += 1
+            # Apply stemming
+            word1 = p_stemmer.stem(word1)
+            word2 = p_stemmer.stem(word2)
+
+            # Remove punctuation and convert to lowercase
+            word1 = ''.join(char.lower() for char in word1 if char.isalpha())
+            word2 = ''.join(char.lower() for char in word2 if char.isalpha())
+
+            # Skip stop words and biwords containing numbers
+            if word1 and word2 and word1 not in stop_words and word2 not in stop_words and not any(char.isdigit() for char in word1 + word2):
+                biword = word1 + " " + word2
+                processed_biwords[(biword, zone)] = processed_biwords.get((biword, zone), 0) + 1
 
     return processed_biwords
 
