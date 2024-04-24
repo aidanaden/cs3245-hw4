@@ -13,6 +13,9 @@ import string
 import pickle
 import math
 from math import sqrt, log10
+
+from retrieve import set_dictionary, set_posting_file, term_in_dict, get_term_doc_count, get_collection_size, get_posting_list, get_postings_docs, get_doc_term_zone_tf
+
 Important_courts = {"SG Court of Appeal", "SG Privy Council", "UK House of Lords", "UK Supreme Court", "High Court of Australia", "CA Supreme Court"}
 
 ZONES = {
@@ -27,34 +30,11 @@ RELEVANCE_THRESHOLD = 0.6
 def usage():
     print("usage: " + sys.argv[0] + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results")
   
-def process_to_tokens(line):
-    # Initialise stemmer, lemmatizer & stopwords
-    p_stemmer = PorterStemmer()
-    lemm = WordNetLemmatizer()
-    stop_words = set(stopwords.words("english"))
-    punctuation_chars = set(string.punctuation)
-    
-    processed_tokens = {}
-    for token in nltk.word_tokenize(line):
-        token = re.sub(r'^[0-9,]+$', '', token) # Apply number removal
-        if all(char in punctuation_chars for char in token): # Remove punctuation tokens
-            continue
-        token = p_stemmer.stem(token) # Apply stemming
-        token = token.lower() # Case-folding
-        # token = lemm.lemmatize(token, "v") # Apply lemmatization
-        if token in stop_words: # Apply stopword removal
-            continue
-        
-        # Update token count
-        if token not in processed_tokens:
-            processed_tokens[token] = 1
-        else:
-            processed_tokens[token] += 1
-    
-    return processed_tokens
 
 def run_search(dictionary_file, postings_file, query_file, results_file):
-    dictionary = get_dictionary()
+    set_dictionary(dictionary_file)
+    set_posting_file(postings_file)
+    p_stemmer = PorterStemmer()
 
     results = ""
     with open(query_file, "r") as f:
@@ -64,77 +44,66 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
         while rel_doc:
             relevant_docs.append(int(rel_doc))
 
-        terms = parse_query(query)
+        terms = parse_query(query, p_stemmer)
+        relevant_docs = run_query(terms)
 
-        # terms = refine_query(terms)
-
-        query_weights = get_query_weights(terms, dictionary)
-        document_scores = get_document_scores(query_weights, dictionary)
-        [relevant_docs, irrelevant_docs] = get_relevant_docs(document_scores)
+        # terms = refine_query(relevant_docs)
+        
+        relevant_docs = run_query(terms)
 
         results += " ".join(relevant_docs) + "\n"
 
     with open(results_file, "w") as f:
         f.write(results)
 
-
-# return map{ term: doc_count }
-def get_dictionary():
-    return {}
-
-# get total number of documents
-def get_collection_size():
-    return 1
-
-# get normalization val for doc
-def get_document_normalization(doc):
-    return 1
-
-# accumulate all term.title, term.content, ...
-# return [doc1, doc2, ...]
-def get_postings_docs(term):
-    return []
-
-# get term.zone tf val
-def get_doc_term_zone_tf(doc, term, zone):
-    return 0
-
 # e.g. "fertility treatment" AND damages => ["fertility treatment", "damages"]
 # e.g. "quiet phone call" => ["quiet", "phone", "call"]
-def parse_query(query):
+def parse_query(query, stemmer):
     terms = []
     if 'AND' in query:
         terms = [x.strip().strip('"') for x in query.split("AND")]
     else:
         terms = [x.strip() for x in query.split(" ")]
         
-    return tokenize_terms(terms)
+    return tokenize_terms(terms, stemmer)
 
-def tokenize_terms(terms):
+def tokenize_terms(terms, stemmer):
     res = []
     for x in terms:
-        # TODO: follow index steming
-        res.append(x)
+        words = nltk.word_tokenize(x)
+        words = [stemmer.stem(word) for word in words]
+        words = [word.lower() for word in words]
+        res.append(" ".join(words))
         
     return res
 
+def run_query(terms):
+    query_weights = get_query_weights(terms)
+    document_scores = get_document_scores(query_weights)
+    relevant_docs = get_relevant_docs(document_scores)
+    return relevant_docs
+
 # get td-idf of query, cosine normalized
-# return map{ word: td-idf }
-def get_query_weights(terms, dictionary):
+# return map{ word: tf-idf-normalized }
+def get_query_weights(terms):
     query_weights = {}
     collection_size = get_collection_size()
     normalize = 0
 
     term_counts = {}
+
+    # term_counts = dict{ term: raw_count }
     for term in terms:
         if term not in term_counts:
             term_counts[term] = 0
         term_counts[term] += 1
 
+    # query_weights = dict{ term: tf-idf }
     for term, count in term_counts.keys():
         tf = 1 + math.log10(count)
-        if term in dictionary:
-            idf = math.log10(collection_size / dictionary[term])
+        if term_in_dict(term):
+            term_doc_count = get_term_doc_count(term)
+            idf = math.log10(collection_size / term_doc_count)
         else:
             idf = 0
 
@@ -142,6 +111,7 @@ def get_query_weights(terms, dictionary):
         query_weights[term] = tf_idf
         normalize += tf_idf * tf_idf
 
+    # query_weights = dict{ term: tf-idf-normalized }
     if normalize > 0:
         normalize = math.sqrt(normalize)
         for term in query_weights:
@@ -149,9 +119,9 @@ def get_query_weights(terms, dictionary):
 
     return query_weights
 
-# get td-idf document scores
+# get lnc.ltc document scores
 # return map{ doc: score }
-def get_document_scores(query_weights, dictionary):
+def get_document_scores(query_weights):
     document_scores = {}
     for term, weight in query_weights.items():
         postings = get_postings_docs(term)
@@ -165,24 +135,19 @@ def get_document_scores(query_weights, dictionary):
 
 # get zone weighted tf of term in doc, cosine normalized
 def get_doc_term_weight(doc, term):
-    normalize = get_document_normalization(doc)
     score = 0
     for zone, weight in ZONES.items():
         score += get_doc_term_zone_tf(doc, term, zone) * weight
 
-    return score / normalize
+    return score
 
-# return [relevant_docs_arr, irrelevant_docs_arr], both sorted most to least relevant
+# return relevant docs sorted most to least relevant
 def get_relevant_docs(doc_scores):
     relevant = []
-    irrelevant = []
     for doc, score in doc_scores.items():
         if score > RELEVANCE_THRESHOLD:
             relevant.append([doc, score])
-        else:
-            irrelevant.append([doc, score])
             
     relevant.sort(key=lambda x: x[1], reverse=True)
-    irrelevant.sort(key=lambda x: x[1], reverse=True)
     
-    return [[x[0] for x in relevant], [x[0] for x in irrelevant]]
+    return [x[0] for x in relevant]
