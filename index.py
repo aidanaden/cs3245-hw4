@@ -183,7 +183,7 @@ def build_index(in_dir, out_dict, out_postings):
         # Store IDF for the term
         idf[term] = norm_value
     # Write all postings as a string
-    # "zone||docID  docNormalizedTF zone||nextdocID  nextdocTF..."
+    # "docID  docNormalizedTF nextdocID  nextdocTF..."
     pointerpos = 0
     postingfile = open(out_postings, "w")
     final_dict = {}
