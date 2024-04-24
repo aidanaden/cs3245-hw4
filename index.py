@@ -17,9 +17,6 @@ import pickle
 import string
 import math
 
-MOST_IMPORTANT_COURTS = {"SG Court of Appeal", "SG Privy Council", "UK House of Lords", "UK Supreme Court", "High Court of Australia", "CA Supreme Court"}
-IMPORTANT_COURTS = {"SG High Court", "Singapore International Commercial Court", "HK High Court", "HK Court of First Instance", "UK Crown Court", "UK Court of Appeal", "UK High Court", "Federal Court of Australia", "NSW Court of Appeal", "NSW Court of Criminal Appeal", "NSW Supreme Court"}
-
 class Doc:
     def __init__(self, docID, title, content, date, court):
         self.docID = docID
@@ -103,18 +100,17 @@ def build_index(in_dir, out_dict, out_postings):
     csv.field_size_limit(100000000)
     corpus = csv.reader(open(in_dir, 'r', encoding="utf-8"))
     next(corpus)
-    collectionsize = 1000000
-    
+
     raw_tf = {}
     norm_tf = {}
     docfreq = {}
     posting = {}
     
-    limit = 2
-    count = 0
+    #limit = 100
+    #count = 0
     for entry in corpus:
-        if count == limit:
-            break
+        #if count == limit:
+        #    break
         doc = Doc(entry[0], entry[1], entry[2], entry[3], entry[4])
         tokens = {}
         mono_tokens = {}
@@ -133,8 +129,9 @@ def build_index(in_dir, out_dict, out_postings):
         # Tokens = {(processed_token, zone): raw_termfreq}
         tokens.update(mono_tokens)
         tokens.update(bi_tokens)
+
         for key in tokens:
-            term = key[0]
+            term, zone = key
             if term not in raw_tf:
                 raw_tf[term] = 1
             else:
@@ -142,60 +139,41 @@ def build_index(in_dir, out_dict, out_postings):
                 
         # log and normalize (log-frequency weighting, w t,d)
         for term in raw_tf:
-            norm_tf[term] = 1 + math.log10(raw_tf[term])
-        # Calculating Euclidean norm of vector representing termfreq
+            norm_tf[key] = 1 + math.log10(raw_tf[term])
+        
+        # Calculating Euclidean norm for cosine normalization
         square_sum = 0
         for value in norm_tf.values():
             square_sum += value ** 2
         lengthN = math.sqrt(square_sum)
         
-        # Document freqency (docfreq) for tokens in collection
-        for term, value in norm_tf.items():
-            # Normalize TF-IDF(t,d)
-            norm_tfidf = value / lengthN
+        for key, value in norm_tf.items():
+            # Cosine normalization
+            norm_tf[key] = value/lengthN
             for key in tokens:
-                if term == key[0]:
-                    if key not in docfreq:
-                        docfreq[key] = 1
-                        posting[key] = {}
-                    elif doc.docID not in posting[key]:
-                        docfreq[key] += 1
-                    # Posting is a dictionary of '(term, zone) : {docID: normalizedvalue}'
-                    posting[key][doc.docID] = norm_tfidf
+                if key not in posting:
+                    posting[key] = {}
+                posting[key][doc.docID] = value
+
         print(f"FileID: {doc.docID} indexed.")
         count += 1
 
     print("postings generated...")
-    # formula: IDF(term) = log10(collectionsize/docfreq_of_term)
-    # IDFs are stored as tuples (docfreq, normalized IDF)
-    idf = {}
-    # Create a set of unique terms ignoring the zones
-    unique_terms = set(term for term, _ in docfreq)
-
-    # Calculate IDF for each unique term
-    for term in unique_terms:
-        # Get the total document frequency for the term across all zones
-        total_df = sum(docfreq[(term, zone)] for zone in set(zone for _, zone in docfreq if (term, zone) in docfreq))
-
-        # Calculate IDF using the total document frequency
-        norm_value = math.log10(float(collectionsize) / float(total_df))
-
-        # Store IDF for the term
-        idf[term] = norm_value
+                    
     # Write all postings as a string
-    # "docID  docNormalizedTF nextdocID  nextdocTF..."
+    # for each term: "$ docID  docNormalizedTF nextdocID  nextdocTF..."
     pointerpos = 0
-    postingfile = open(out_postings, "w")
     final_dict = {}
+    postingfile = open(out_postings, "w")
     for key, doc_dict in posting.items():
-        postingstring = ""
+        postingstring = "$" # mark start of posting
         term, zone = key
         for docID, normtf in sorted(doc_dict.items(), key=lambda item: int(item[0])):
-            postingstring += " " + str(docID) + " " +  str(normtf) 
-        postingfile.write(postingstring)
+            postingstring += " " + str(docID) + " " +  str(normtf)
         
+        postingfile.write(postingstring)
         # pointerpos added to track position in postings file
-        final_dict[(term, zone)] = (idf[term], pointerpos)
+        final_dict[(term, zone)] = (pointerpos)
         pointerpos += len(postingstring)
     postingfile.close()
     pickle.dump(final_dict, open(out_dict, "wb"))
