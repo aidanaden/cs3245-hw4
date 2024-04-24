@@ -28,53 +28,42 @@ class Doc:
 def process_to_tokens(text, zone):
     p_stemmer = PorterStemmer()
     stop_words = set(stopwords.words("english"))
+    punctuation_chars = set(string.punctuation)
 
+    text = re.sub(r'^[0-9,]+$', '', text)
     # Tokenize the text into words
+    words = nltk.word_tokenize(text)
+
     processed_tokens = {}
-    for sentence in nltk.sent_tokenize(text):
-        words = nltk.word_tokenize(sentence)
-
-        # Process each word
-        for word in words:
-            # Apply stemming
-            word = p_stemmer.stem(word)
-            # Remove punctuation and convert to lowercase
-            word = ''.join(char.lower() for char in word if char.isalpha())
-
-            # Skip stop words and empty words
-            if word and word not in stop_words:
-                processed_tokens[(word, zone)] = processed_tokens.get((word, zone), 0) + 1
-
-    return processed_tokens
-
-def process_to_biwords(text, zone):
-    p_stemmer = PorterStemmer()
-    stop_words = set(stopwords.words("english"))
-
-    # Tokenize the text into words
     processed_biwords = {}
-    for sentence in nltk.sent_tokenize(text):
-        words = nltk.word_tokenize(sentence)
 
-        # Process each word
-        for i in range(len(words) - 1):
-            word1 = words[i]
-            word2 = words[i + 1]
+    cur_biword = []
+    for word in words:
+        if word in stop_words or not word.isalpha() or word in punctuation_chars:
+            cur_biword = []
+            continue
+        word = p_stemmer.stem(word, to_lowercase=True)
 
-            # Apply stemming
-            word1 = p_stemmer.stem(word1)
-            word2 = p_stemmer.stem(word2)
+        # process word
+        if (word,zone) not in processed_tokens:
+            processed_tokens[(word, zone)] = 1
+        else:
+            processed_tokens[(word, zone)] += 1
 
-            # Remove punctuation and convert to lowercase
-            word1 = ''.join(char.lower() for char in word1 if char.isalpha())
-            word2 = ''.join(char.lower() for char in word2 if char.isalpha())
+        # process biword
+        cur_biword.append(word)
 
-            # Skip stop words and biwords containing numbers
-            if word1 and word2 and word1 not in stop_words and word2 not in stop_words and not any(char.isdigit() for char in word1 + word2):
-                biword = word1 + " " + word2
-                processed_biwords[(biword, zone)] = processed_biwords.get((biword, zone), 0) + 1
+        if len(cur_biword) == 2:
+            biword = cur_biword[0] + " " + cur_biword[1]
 
-    return processed_biwords
+            if (biword,zone) not in processed_biwords:
+                processed_biwords[(biword, zone)] = 1
+            else:
+                processed_biwords[(biword, zone)] += 1
+
+            cur_biword[0] = cur_biword.pop()
+
+    return [processed_tokens, processed_biwords]
 
 def build_index(in_dir, out_dict, out_postings):
     """
@@ -83,39 +72,25 @@ def build_index(in_dir, out_dict, out_postings):
     """
     print('indexing...')
     
-    # keys are terms(strings) and values are tuples of (docfreq, idf)
     csv.field_size_limit(100000000)
     corpus = csv.reader(open(in_dir, 'r', encoding="utf-8"))
     next(corpus)
 
     raw_tf = {}
     norm_tf = {}
-    docfreq = {}
     posting = {}
     
-    #limit = 100
-    #count = 0
     for entry in corpus:
-        #if count == limit:
-        #    break
+        
         doc = Doc(entry[0], entry[1], entry[2], entry[3], entry[4])
         tokens = {}
-        mono_tokens = {}
-        mono_tokens.update(process_to_tokens(doc.title, "title"))
-        mono_tokens.update(process_to_tokens(doc.content, "content"))
-        mono_tokens[doc.date.split()[0], "date"] = 1
-        mono_tokens.update(process_to_tokens(doc.court, "court"))
-
-        bi_tokens = {}
-        bi_tokens.update(process_to_biwords(doc.title, "title"))
-        bi_tokens.update(process_to_biwords(doc.content, "content"))
-        bi_tokens[(doc.date.split()[0], "date")] = 1
-        bi_tokens.update(process_to_biwords(doc.court, "court"))
-
-        # merge tokens
-        # Tokens = {(processed_token, zone): raw_termfreq}
-        tokens.update(mono_tokens)
-        tokens.update(bi_tokens)
+        for entries in process_to_tokens(doc.title, "title"):
+            tokens.update(entries)
+        for entries in process_to_tokens(doc.title, "content"):
+            tokens.update(entries)
+        for entries in process_to_tokens(doc.title, "court"):
+            tokens.update(entries)
+        tokens[doc.date.split()[0], "date"] = 1
 
         for key in tokens:
             term, zone = key
@@ -143,7 +118,6 @@ def build_index(in_dir, out_dict, out_postings):
                 posting[key][doc.docID] = value
 
         print(f"FileID: {doc.docID} indexed.")
-        count += 1
 
     print("postings generated...")
                     
