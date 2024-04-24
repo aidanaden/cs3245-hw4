@@ -110,7 +110,7 @@ def build_index(in_dir, out_dict, out_postings):
     docfreq = {}
     posting = {}
     
-    limit = 30
+    limit = 2
     count = 0
     for entry in corpus:
         if count == limit:
@@ -121,11 +121,13 @@ def build_index(in_dir, out_dict, out_postings):
         mono_tokens.update(process_to_tokens(doc.title, "title"))
         mono_tokens.update(process_to_tokens(doc.content, "content"))
         mono_tokens[doc.date.split()[0], "date"] = 1
+        mono_tokens.update(process_to_tokens(doc.court, "court"))
 
         bi_tokens = {}
         bi_tokens.update(process_to_biwords(doc.title, "title"))
-        bi_tokens.update(process_to_tokens(doc.content, "content"))
+        bi_tokens.update(process_to_biwords(doc.content, "content"))
         bi_tokens[(doc.date.split()[0], "date")] = 1
+        bi_tokens.update(process_to_biwords(doc.court, "court"))
 
         # merge tokens
         # Tokens = {(processed_token, zone): raw_termfreq}
@@ -167,7 +169,6 @@ def build_index(in_dir, out_dict, out_postings):
     # formula: IDF(term) = log10(collectionsize/docfreq_of_term)
     # IDFs are stored as tuples (docfreq, normalized IDF)
     idf = {}
-
     # Create a set of unique terms ignoring the zones
     unique_terms = set(term for term, _ in docfreq)
 
@@ -181,23 +182,23 @@ def build_index(in_dir, out_dict, out_postings):
 
         # Store IDF for the term
         idf[term] = norm_value
-    
     # Write all postings as a string
     # "zone||docID  docNormalizedTF zone||nextdocID  nextdocTF..."
     pointerpos = 0
     postingfile = open(out_postings, "w")
+    final_dict = {}
     for key, doc_dict in posting.items():
         postingstring = ""
         term, zone = key
         for docID, normtf in sorted(doc_dict.items(), key=lambda item: int(item[0])):
-            postingstring += str(zone) + "||" + str(docID) + " " +  str(normtf) + " "
+            postingstring += " " + str(docID) + " " +  str(normtf) 
         postingfile.write(postingstring)
         
         # pointerpos added to track position in postings file
-        idf[term] = (idf[term], pointerpos)
+        final_dict[(term, zone)] = (idf[term], pointerpos)
         pointerpos += len(postingstring)
     postingfile.close()
-    pickle.dump(idf, open(out_dict, "wb"))
+    pickle.dump(final_dict, open(out_dict, "wb"))
     print("postings written to disk...")
 
 input_directory = output_file_dictionary = output_file_postings = None
