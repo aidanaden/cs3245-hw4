@@ -1,6 +1,12 @@
 
 import pickle
-from search import ZONES
+
+ZONES = {
+        'title': 0.2, 
+        'court': 0.2,
+        'date': 0.1,
+        'content': 0.5
+        }
 
 dictionary = {}
 
@@ -8,11 +14,12 @@ postings_path = ""
 
 # return map{ (term, zone): pointer }
 def set_dictionary(dictionary_file):
+    global dictionary
     with open(dictionary_file, 'rb') as handle:
-        dict = pickle.load(handle)
-    return dict
+        dictionary = pickle.load(handle)
 
 def set_posting_file(postings_file):
+    global postings_path
     postings_path = postings_file
 
 def term_in_dict(term):
@@ -33,7 +40,7 @@ def get_term_doc_count(term):
 
 # get total number of documents
 def get_collection_size():
-    return 1
+    return dictionary[('*', '*')]
 
 # return arr[ [docID, tf-norm] ]
 def get_posting_list(term, zone):
@@ -44,9 +51,11 @@ def get_posting_list(term, zone):
     posting_str = ""
     with open(postings_path, "r") as f:
         pointer = dictionary[key]
-        f.seek(pointer + 1) # skip start '$' char
-        cur = f.read()
-        while cur != "$":
+        f.seek(pointer + 2) # skip start '$ ' char
+        while True:
+            cur = f.read(1)
+            if cur == '$':
+                break
             posting_str += cur
 
         posting_str.strip()
@@ -82,16 +91,20 @@ def get_doc_term_zone_tf(doc, term, zone):
     posting_str = ""
     with open(postings_path, "r") as f:
         pointer = dictionary[key]
-        f.seek(pointer + 1) # skip start '$' char
-        cur = f.read()
-        while cur != "$":
+        f.seek(pointer + 2) # skip start '$ ' char
+        while True:
+            cur = f.read(1)
+            if cur == "$":
+                break
             posting_str += cur
 
         posting_str.strip()
-        
-    tf = 0
-    for count, x in enumerate(posting_str.split(" ")):
-        if x == doc:
-            tf = posting_str[count + 1]
 
-    return tf
+    split_posting = posting_str.split(" ")
+    tf = 0
+    for count, x in enumerate(split_posting):
+        if x == doc:
+            tf = split_posting[count + 1]
+            break
+
+    return float(tf)

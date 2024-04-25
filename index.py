@@ -79,6 +79,7 @@ def build_index(in_dir, out_dict, out_postings):
     raw_tf = {}
     norm_tf = {}
     posting = {}
+    collection_size = 0
     
     for entry in corpus:
         
@@ -111,12 +112,14 @@ def build_index(in_dir, out_dict, out_postings):
         
         for key, value in norm_tf.items():
             # Cosine normalization
-            norm_tf[key] = value/lengthN
+            normalized_val = value/lengthN
+            norm_tf[key] = normalized_val
             for key in tokens:
                 if key not in posting:
                     posting[key] = {}
-                posting[key][doc.docID] = value
+                posting[key][doc.docID] = normalized_val
 
+        collection_size += 1
         print(f"FileID: {doc.docID} indexed.")
 
     print("postings generated...")
@@ -137,6 +140,7 @@ def build_index(in_dir, out_dict, out_postings):
         final_dict[(term, zone)] = (pointerpos)
         pointerpos += len(postingstring)
     postingfile.close()
+    final_dict[("*", "*")] = (collection_size) # add collection size to dict
     pickle.dump(final_dict, open(out_dict, "wb"))
     print("postings written to disk...")
 

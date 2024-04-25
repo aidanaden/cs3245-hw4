@@ -9,21 +9,10 @@ from nltk.stem.wordnet import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer, word_tokenize
 from nltk.corpus import stopwords
 
-import string
-import pickle
 import math
 from math import sqrt, log10
 
-from retrieve import set_dictionary, set_posting_file, term_in_dict, get_term_doc_count, get_collection_size, get_posting_list, get_postings_docs, get_doc_term_zone_tf
-
-Important_courts = {"SG Court of Appeal", "SG Privy Council", "UK House of Lords", "UK Supreme Court", "High Court of Australia", "CA Supreme Court"}
-
-ZONES = {
-        'title': 0.2, 
-        'court': 0.2,
-        'date_posted': 0.1,
-        'content': 0.5
-        }
+from retrieve import dictionary, set_dictionary, set_posting_file, term_in_dict, get_term_doc_count, get_collection_size, get_posting_list, get_postings_docs, get_doc_term_zone_tf, ZONES
 
 RELEVANCE_THRESHOLD = 0.6
 
@@ -43,13 +32,13 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
         rel_doc = f.readline()
         while rel_doc:
             relevant_docs.append(int(rel_doc))
+            rel_doc = f.readline()
 
         terms = parse_query(query, p_stemmer)
         relevant_docs = run_query(terms)
 
         # terms = refine_query(relevant_docs)
-        
-        relevant_docs = run_query(terms)
+        # relevant_docs = run_query(terms)
 
         results += " ".join(relevant_docs) + "\n"
 
@@ -99,7 +88,7 @@ def get_query_weights(terms):
         term_counts[term] += 1
 
     # query_weights = dict{ term: tf-idf }
-    for term, count in term_counts.keys():
+    for term, count in term_counts.items():
         tf = 1 + math.log10(count)
         if term_in_dict(term):
             term_doc_count = get_term_doc_count(term)
@@ -128,7 +117,7 @@ def get_document_scores(query_weights):
         for doc in postings:
             if doc not in document_scores:
                 document_scores[doc] = 0
-            document_scores[doc] += get_doc_term_weight(doc) * weight
+            document_scores[doc] += get_doc_term_weight(doc, term) * weight
 
     return document_scores
             
@@ -151,3 +140,27 @@ def get_relevant_docs(doc_scores):
     relevant.sort(key=lambda x: x[1], reverse=True)
     
     return [x[0] for x in relevant]
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:], 'd:p:q:o:')
+except getopt.GetoptError:
+    usage()
+    sys.exit(2)
+
+for o, a in opts:
+    if o == '-d':
+        dictionary_file  = a
+    elif o == '-p':
+        postings_file = a
+    elif o == '-q':
+        file_of_queries = a
+    elif o == '-o':
+        file_of_output = a
+    else:
+        assert False, "unhandled option"
+
+if dictionary_file == None or postings_file == None or file_of_queries == None or file_of_output == None :
+    usage()
+    sys.exit(2)
+
+run_search(dictionary_file, postings_file, file_of_queries, file_of_output)
