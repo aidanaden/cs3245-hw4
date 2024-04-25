@@ -7,7 +7,7 @@ from processing import stem
 
 
 def expand_clause(
-    expression: str, use_stemmer: bool = True, num_expand_synonyms: int = 3
+    expression: str, use_stemmer: bool = True, num_expand_synonyms: int = 2
 ) -> str:
     """
     Args:

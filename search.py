@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-import nltk
 import sys
 import getopt
 import math
@@ -7,19 +6,14 @@ import math
 from query import (
     categorise_and_stem_query,
     get_words_from_clauses,
-    intersect_document_ids,
-    tag_results,
-    union_document_ids,
 )
 from query_expand import expand_clause
 from retrieve import (
-    dictionary,
     set_dictionary,
     set_posting_file,
     term_in_dict,
     get_term_doc_count,
     get_collection_size,
-    get_posting_list,
     get_postings_docs,
     get_doc_term_zone_tf,
     ZONES,
@@ -53,8 +47,10 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
         query_list = get_words_from_clauses(clauses)
         expanded_words = []
         for query in query_list:
-            expanded_words.extend(expand_clause(query))
-            query_list.extend(expanded_words)
+            expanded = expand_clause(query)
+            print("expanded for query: ", query, " expanded: ", expanded)
+            expanded_words.extend(expanded)
+        query_list.extend(expanded_words)
         query_list = list(set(query_list))
         final_result = run_query(query_list)
         results = " ".join(str(doc_id) for doc_id in final_result)
@@ -64,8 +60,11 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
 
 
 def run_query(terms: list[str]):
+    print("runing query weights")
     query_weights = get_query_weights(terms)
+    print("running doc scores with weights: ", query_weights)
     document_scores = get_document_scores(query_weights)
+    print("running relevant docs")
     relevant_docs = get_relevant_docs(document_scores)
     return relevant_docs
 
@@ -135,7 +134,7 @@ def get_relevant_docs(doc_scores):
     relevant = []
     for doc, score in doc_scores.items():
         if score > RELEVANCE_THRESHOLD:
-            relevant.append([doc, score])
+            relevant.append((doc, score))
 
     relevant.sort(key=lambda x: x[1], reverse=True)
 
