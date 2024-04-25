@@ -30,7 +30,9 @@ def usage():
     )
 
 
-def run_search(dictionary_file, postings_file, query_file, results_file, expand_query: bool = True):
+def run_search(
+    dictionary_file, postings_file, query_file, results_file, expand_query: bool = True
+):
     set_dictionary(dictionary_file)
     set_posting_file(postings_file)
 
@@ -45,7 +47,7 @@ def run_search(dictionary_file, postings_file, query_file, results_file, expand_
 
         clauses = categorise_and_stem_query(query)
         query_list = get_words_from_clauses(clauses)
-        if (expand_query):
+        if expand_query:
             expanded_words = []
             for query in query_list:
                 expanded = expand_clause(query)
