@@ -16,6 +16,7 @@ from retrieve import (
     get_collection_size,
     get_postings_docs,
     get_doc_term_zone_tf,
+    get_posting_list,
     ZONES,
 )
 
@@ -109,21 +110,34 @@ def get_query_weights(terms: list[str]) -> dict[str, float]:
 # return map{ doc: score }
 def get_document_scores(query_weights) -> dict[int, float]:
     document_scores = {}
+    term_posts = {}
     for term, weight in query_weights.items():
         postings = get_postings_docs(term)
+
+        term_posts['title'] = posting_to_dict(get_posting_list(term, 'title'))
+        term_posts['date'] = posting_to_dict(get_posting_list(term, 'date'))
+        term_posts['court'] = posting_to_dict(get_posting_list(term, 'court'))
+        term_posts['content'] = posting_to_dict(get_posting_list(term, 'content'))
         for doc in postings:
             if doc not in document_scores:
                 document_scores[doc] = 0
-            document_scores[doc] += get_doc_term_weight(doc, term) * weight
+            document_scores[doc] += get_doc_term_weight(doc, term_posts) * weight
 
     return document_scores
 
 
+def posting_to_dict(posting):
+    res = {}
+    for p in posting:
+        res[p[0]] = float(p[1])
+    return res
+
 # get zone weighted tf of term in doc, cosine normalized
-def get_doc_term_weight(doc, term):
+def get_doc_term_weight(doc, term_posts):
     score = 0
     for zone, weight in ZONES.items():
-        score += get_doc_term_zone_tf(doc, term, zone) * weight
+        score += term_posts[zone].get(doc, 0) * weight
+        # score += get_doc_term_zone_tf(doc, term, zone) * weight
 
     return score
 
