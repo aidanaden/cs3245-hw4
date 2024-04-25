@@ -1,29 +1,38 @@
 #!/usr/bin/python3
-import re
-import nltk
 import sys
 import getopt
-
-from nltk.stem import PorterStemmer
-from nltk.stem.wordnet import WordNetLemmatizer
-from nltk.tokenize import RegexpTokenizer, word_tokenize
-from nltk.corpus import stopwords
-
 import math
-from math import sqrt, log10
 
-from retrieve import dictionary, set_dictionary, set_posting_file, term_in_dict, get_term_doc_count, get_collection_size, get_posting_list, get_postings_docs, get_doc_term_zone_tf, ZONES
+from query import (
+    categorise_and_stem_query,
+    get_words_from_clauses,
+)
+from query_expand import expand_clause
+from retrieve import (
+    set_dictionary,
+    set_posting_file,
+    term_in_dict,
+    get_term_doc_count,
+    get_collection_size,
+    get_postings_docs,
+    get_doc_term_zone_tf,
+    ZONES,
+)
 
 RELEVANCE_THRESHOLD = 0.6
 
+
 def usage():
-    print("usage: " + sys.argv[0] + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results")
-  
+    print(
+        "usage: "
+        + sys.argv[0]
+        + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results"
+    )
+
 
 def run_search(dictionary_file, postings_file, query_file, results_file):
     set_dictionary(dictionary_file)
     set_posting_file(postings_file)
-    p_stemmer = PorterStemmer()
 
     results = ""
     with open(query_file, "r") as f:
@@ -34,47 +43,35 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
             relevant_docs.append(int(rel_doc))
             rel_doc = f.readline()
 
-        terms = parse_query(query, p_stemmer)
-        relevant_docs = run_query(terms)
-
-        # terms = refine_query(relevant_docs)
-        # relevant_docs = run_query(terms)
-
-        results += " ".join(relevant_docs) + "\n"
+        clauses = categorise_and_stem_query(query)
+        query_list = get_words_from_clauses(clauses)
+        expanded_words = []
+        for query in query_list:
+            expanded = expand_clause(query)
+            print("expanded for query: ", query, " expanded: ", expanded)
+            expanded_words.extend(expanded)
+        query_list.extend(expanded_words)
+        query_list = list(set(query_list))
+        final_result = run_query(query_list)
+        results = " ".join(str(doc_id) for doc_id in final_result)
 
     with open(results_file, "w") as f:
         f.write(results)
 
-# e.g. "fertility treatment" AND damages => ["fertility treatment", "damages"]
-# e.g. "quiet phone call" => ["quiet", "phone", "call"]
-def parse_query(query, stemmer):
-    terms = []
-    if 'AND' in query:
-        terms = [x.strip().strip('"') for x in query.split("AND")]
-    else:
-        terms = [x.strip() for x in query.split(" ")]
-        
-    return tokenize_terms(terms, stemmer)
 
-def tokenize_terms(terms, stemmer):
-    res = []
-    for x in terms:
-        words = nltk.word_tokenize(x)
-        words = [stemmer.stem(word) for word in words]
-        words = [word.lower() for word in words]
-        res.append(" ".join(words))
-        
-    return res
-
-def run_query(terms):
+def run_query(terms: list[str]):
+    print("runing query weights")
     query_weights = get_query_weights(terms)
+    print("running doc scores with weights: ", query_weights)
     document_scores = get_document_scores(query_weights)
+    print("running relevant docs")
     relevant_docs = get_relevant_docs(document_scores)
     return relevant_docs
 
+
 # get td-idf of query, cosine normalized
 # return map{ word: tf-idf-normalized }
-def get_query_weights(terms):
+def get_query_weights(terms: list[str]) -> dict[str, float]:
     query_weights = {}
     collection_size = get_collection_size()
     normalize = 0
@@ -108,9 +105,10 @@ def get_query_weights(terms):
 
     return query_weights
 
+
 # get lnc.ltc document scores
 # return map{ doc: score }
-def get_document_scores(query_weights):
+def get_document_scores(query_weights) -> dict[int, float]:
     document_scores = {}
     for term, weight in query_weights.items():
         postings = get_postings_docs(term)
@@ -120,7 +118,7 @@ def get_document_scores(query_weights):
             document_scores[doc] += get_doc_term_weight(doc, term) * weight
 
     return document_scores
-            
+
 
 # get zone weighted tf of term in doc, cosine normalized
 def get_doc_term_weight(doc, term):
@@ -130,36 +128,43 @@ def get_doc_term_weight(doc, term):
 
     return score
 
+
 # return relevant docs sorted most to least relevant
 def get_relevant_docs(doc_scores):
     relevant = []
     for doc, score in doc_scores.items():
         if score > RELEVANCE_THRESHOLD:
-            relevant.append([doc, score])
-            
+            relevant.append((doc, score))
+
     relevant.sort(key=lambda x: x[1], reverse=True)
-    
+
     return [x[0] for x in relevant]
 
+
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'd:p:q:o:')
+    opts, args = getopt.getopt(sys.argv[1:], "d:p:q:o:")
 except getopt.GetoptError:
     usage()
     sys.exit(2)
 
 for o, a in opts:
-    if o == '-d':
-        dictionary_file  = a
-    elif o == '-p':
+    if o == "-d":
+        dictionary_file = a
+    elif o == "-p":
         postings_file = a
-    elif o == '-q':
+    elif o == "-q":
         file_of_queries = a
-    elif o == '-o':
+    elif o == "-o":
         file_of_output = a
     else:
         assert False, "unhandled option"
 
-if dictionary_file == None or postings_file == None or file_of_queries == None or file_of_output == None :
+if (
+    dictionary_file == None
+    or postings_file == None
+    or file_of_queries == None
+    or file_of_output == None
+):
     usage()
     sys.exit(2)
 
