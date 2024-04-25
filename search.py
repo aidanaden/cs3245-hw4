@@ -30,7 +30,7 @@ def usage():
     )
 
 
-def run_search(dictionary_file, postings_file, query_file, results_file):
+def run_search(dictionary_file, postings_file, query_file, results_file, expand_query: bool = True):
     set_dictionary(dictionary_file)
     set_posting_file(postings_file)
 
@@ -45,12 +45,12 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
 
         clauses = categorise_and_stem_query(query)
         query_list = get_words_from_clauses(clauses)
-        expanded_words = []
-        for query in query_list:
-            expanded = expand_clause(query)
-            print("expanded for query: ", query, " expanded: ", expanded)
-            expanded_words.extend(expanded)
-        query_list.extend(expanded_words)
+        if (expand_query):
+            expanded_words = []
+            for query in query_list:
+                expanded = expand_clause(query)
+                expanded_words.extend(expanded)
+            query_list.extend(expanded_words)
         query_list = list(set(query_list))
         final_result = run_query(query_list)
         results = " ".join(str(doc_id) for doc_id in final_result)
@@ -60,11 +60,8 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
 
 
 def run_query(terms: list[str]):
-    print("runing query weights")
     query_weights = get_query_weights(terms)
-    print("running doc scores with weights: ", query_weights)
     document_scores = get_document_scores(query_weights)
-    print("running relevant docs")
     relevant_docs = get_relevant_docs(document_scores)
     return relevant_docs
 
