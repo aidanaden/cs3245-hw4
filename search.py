@@ -1,17 +1,11 @@
 #!/usr/bin/python3
-import re
 import nltk
 import sys
 import getopt
-
-from nltk.stem import PorterStemmer
-from nltk.stem.wordnet import WordNetLemmatizer
-from nltk.tokenize import RegexpTokenizer, word_tokenize
-from nltk.corpus import stopwords
-
 import math
-from math import sqrt, log10
 
+from query import categorise_and_stem_query, QueryType, get_words_from_clauses, intersect_document_ids, tag_results, union_document_ids
+from query_expand import expand_clause
 from retrieve import dictionary, set_dictionary, set_posting_file, term_in_dict, get_term_doc_count, get_collection_size, get_posting_list, get_postings_docs, get_doc_term_zone_tf, ZONES
 
 RELEVANCE_THRESHOLD = 0.6
@@ -23,7 +17,6 @@ def usage():
 def run_search(dictionary_file, postings_file, query_file, results_file):
     set_dictionary(dictionary_file)
     set_posting_file(postings_file)
-    p_stemmer = PorterStemmer()
 
     results = ""
     with open(query_file, "r") as f:
@@ -34,39 +27,46 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
             relevant_docs.append(int(rel_doc))
             rel_doc = f.readline()
 
-        terms = parse_query(query, p_stemmer)
-        relevant_docs = run_query(terms)
+        clauses = categorise_and_stem_query(query)
 
-        # terms = refine_query(relevant_docs)
-        # relevant_docs = run_query(terms)
+        all_and_results = []
+        expanded_words = []
+        for and_clause in clauses:
+            and_clause_result = []
 
-        results += " ".join(relevant_docs) + "\n"
+            # Handle each clause in the and clause
+            for clause in and_clause:
+                clause_word, type = clause
+
+                # Query expansion
+                expanded_clause_word = expand_clause(clause_word)
+                free_text_list = nltk.word_tokenize(expanded_clause_word)
+                expanded_words.extend(free_text_list)
+
+                # Get result for the current clause
+                curr_result = run_query(free_text_list)
+                curr_result = tag_results(curr_result, type)
+
+                # Combine with the existing results
+                and_clause_result = union_document_ids(and_clause_result, curr_result)
+
+            all_and_results.append(and_clause_result)
+
+        # Perform intersection between and clauses
+        combined_result = all_and_results[0]
+        for and_clause_result in all_and_results:
+            combined_result = intersect_document_ids(combined_result, and_clause_result)
+
+        query_list = get_words_from_clauses(clauses)
+        query_list.extend(expanded_words)
+        query_list = list(set(query_list))
+        final_result = run_query(query_list)
+        results = " ".join(str(doc_id) for doc_id in final_result)
 
     with open(results_file, "w") as f:
         f.write(results)
 
-# e.g. "fertility treatment" AND damages => ["fertility treatment", "damages"]
-# e.g. "quiet phone call" => ["quiet", "phone", "call"]
-def parse_query(query, stemmer):
-    terms = []
-    if 'AND' in query:
-        terms = [x.strip().strip('"') for x in query.split("AND")]
-    else:
-        terms = [x.strip() for x in query.split(" ")]
-        
-    return tokenize_terms(terms, stemmer)
-
-def tokenize_terms(terms, stemmer):
-    res = []
-    for x in terms:
-        words = nltk.word_tokenize(x)
-        words = [stemmer.stem(word) for word in words]
-        words = [word.lower() for word in words]
-        res.append(" ".join(words))
-        
-    return res
-
-def run_query(terms):
+def run_query(terms: list[str]):
     query_weights = get_query_weights(terms)
     document_scores = get_document_scores(query_weights)
     relevant_docs = get_relevant_docs(document_scores)
@@ -74,7 +74,7 @@ def run_query(terms):
 
 # get td-idf of query, cosine normalized
 # return map{ word: tf-idf-normalized }
-def get_query_weights(terms):
+def get_query_weights(terms: list[str]) -> dict[str, float]:
     query_weights = {}
     collection_size = get_collection_size()
     normalize = 0
@@ -110,7 +110,7 @@ def get_query_weights(terms):
 
 # get lnc.ltc document scores
 # return map{ doc: score }
-def get_document_scores(query_weights):
+def get_document_scores(query_weights) -> dict[int, float]:
     document_scores = {}
     for term, weight in query_weights.items():
         postings = get_postings_docs(term)
