@@ -87,9 +87,9 @@ def build_index(in_dir, out_dict, out_postings):
         tokens = {}
         for entries in process_to_tokens(doc.title, "title"):
             tokens.update(entries)
-        for entries in process_to_tokens(doc.title, "content"):
+        for entries in process_to_tokens(doc.content, "content"):
             tokens.update(entries)
-        for entries in process_to_tokens(doc.title, "court"):
+        for entries in process_to_tokens(doc.court, "court"):
             tokens.update(entries)
         tokens[doc.date.split()[0], "date"] = 1
 
