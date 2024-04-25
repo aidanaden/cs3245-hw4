@@ -5,7 +5,10 @@ from nltk.corpus import WordNetCorpusReader
 from constants import *
 from processing import stem
 
-def expand_clause(expression: str, use_stemmer: bool = True, num_expand_synonyms: int = 3) -> str:
+
+def expand_clause(
+    expression: str, use_stemmer: bool = True, num_expand_synonyms: int = 3
+) -> str:
     """
     Args:
         expression (str): The expression to expand
@@ -16,7 +19,7 @@ def expand_clause(expression: str, use_stemmer: bool = True, num_expand_synonyms
     """
     # Tokenise and get all possible synonyms
     token_list = nltk.word_tokenize(expression)
-    synsets_token = get_synsets(token_list)   
+    synsets_token = get_synsets(token_list)
 
     expanded_tokens = []
     for i in range(len(synsets_token)):
@@ -25,17 +28,18 @@ def expand_clause(expression: str, use_stemmer: bool = True, num_expand_synonyms
 
         # Make sure original word is included, add as first element
         synonym_names = [synonym.lemma_names()[0].lower() for synonym in synonyms]
-        if (token_list[i] not in synonym_names):
+        if token_list[i] not in synonym_names:
             synonym_names.insert(0, token_list[i])
 
-        if (use_stemmer):
+        if use_stemmer:
             synonym_names = stem(synonym_names)
 
         # Concat everything
-        expanded_token = ' '.join(synonym_names)
+        expanded_token = " ".join(synonym_names)
         expanded_tokens.append(expanded_token)
-    
-    return ' '.join(expanded_tokens)
+
+    return " ".join(expanded_tokens)
+
 
 def pos_to_wordnet(tag: str) -> str:
     """
@@ -44,15 +48,16 @@ def pos_to_wordnet(tag: str) -> str:
     Returns:
         A wordnet tag corresponding to the provided tag
     """
-    if tag.startswith('J'):
+    if tag.startswith("J"):
         return wordnet.ADJ
-    elif tag.startswith('N'):
+    elif tag.startswith("N"):
         return wordnet.NOUN
-    elif tag.startswith('R'):
+    elif tag.startswith("R"):
         return wordnet.ADV
-    elif tag.startswith('V'):
+    elif tag.startswith("V"):
         return wordnet.VERB
     return None
+
 
 def get_synsets(tokens: list[str]) -> list[list]:
     """
@@ -76,6 +81,7 @@ def get_synsets(tokens: list[str]) -> list[list]:
 
     return synsets
 
+
 def remove_duplicate_synsets(synsets):
     """
     Args:
@@ -90,11 +96,12 @@ def remove_duplicate_synsets(synsets):
         word_name = synset.lemma_names()[0]
         if word_name in words_encountered:
             continue
-        
+
         words_encountered[word_name] = True
         unique_synsets.append(synset)
 
     return unique_synsets
+
 
 def get_top_k_synonyms(synsets: list, k: int) -> list[str]:
     """
@@ -104,17 +111,20 @@ def get_top_k_synonyms(synsets: list, k: int) -> list[str]:
     Returns:
         list(str): list of synonyms
     """
-    if (not synsets):
+    if not synsets:
         return []
 
     # Ordered by frequency, first element is most probable word without context
     syn_to_compare = synsets[0]
 
     # Create a new list where each element is (syn_set, similarity score)
-    sim_score = [(synsets[i], syn_to_compare.wup_similarity(synsets[i])) for i in range(len(synsets))]
+    sim_score = [
+        (synsets[i], syn_to_compare.wup_similarity(synsets[i]))
+        for i in range(len(synsets))
+    ]
 
     # Sort in descending score
     sorted(sim_score, key=lambda syn: syn[1] if syn[1] != None else 0, reverse=True)
-    
+
     # Return top k synonyms
     return list(map(lambda x: x[0], sim_score[:k]))

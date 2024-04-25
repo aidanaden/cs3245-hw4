@@ -4,15 +4,37 @@ import sys
 import getopt
 import math
 
-from query import categorise_and_stem_query, QueryType, get_words_from_clauses, intersect_document_ids, tag_results, union_document_ids
+from query import (
+    categorise_and_stem_query,
+    get_words_from_clauses,
+    intersect_document_ids,
+    tag_results,
+    union_document_ids,
+)
 from query_expand import expand_clause
-from retrieve import dictionary, set_dictionary, set_posting_file, term_in_dict, get_term_doc_count, get_collection_size, get_posting_list, get_postings_docs, get_doc_term_zone_tf, ZONES
+from retrieve import (
+    dictionary,
+    set_dictionary,
+    set_posting_file,
+    term_in_dict,
+    get_term_doc_count,
+    get_collection_size,
+    get_posting_list,
+    get_postings_docs,
+    get_doc_term_zone_tf,
+    ZONES,
+)
 
 RELEVANCE_THRESHOLD = 0.6
 
+
 def usage():
-    print("usage: " + sys.argv[0] + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results")
-  
+    print(
+        "usage: "
+        + sys.argv[0]
+        + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results"
+    )
+
 
 def run_search(dictionary_file, postings_file, query_file, results_file):
     set_dictionary(dictionary_file)
@@ -28,37 +50,11 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
             rel_doc = f.readline()
 
         clauses = categorise_and_stem_query(query)
-
-        all_and_results = []
-        expanded_words = []
-        for and_clause in clauses:
-            and_clause_result = []
-
-            # Handle each clause in the and clause
-            for clause in and_clause:
-                clause_word, type = clause
-
-                # Query expansion
-                expanded_clause_word = expand_clause(clause_word)
-                free_text_list = nltk.word_tokenize(expanded_clause_word)
-                expanded_words.extend(free_text_list)
-
-                # Get result for the current clause
-                curr_result = run_query(free_text_list)
-                curr_result = tag_results(curr_result, type)
-
-                # Combine with the existing results
-                and_clause_result = union_document_ids(and_clause_result, curr_result)
-
-            all_and_results.append(and_clause_result)
-
-        # Perform intersection between and clauses
-        combined_result = all_and_results[0]
-        for and_clause_result in all_and_results:
-            combined_result = intersect_document_ids(combined_result, and_clause_result)
-
         query_list = get_words_from_clauses(clauses)
-        query_list.extend(expanded_words)
+        expanded_words = []
+        for query in query_list:
+            expanded_words.extend(expand_clause(query))
+            query_list.extend(expanded_words)
         query_list = list(set(query_list))
         final_result = run_query(query_list)
         results = " ".join(str(doc_id) for doc_id in final_result)
@@ -66,11 +62,13 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
     with open(results_file, "w") as f:
         f.write(results)
 
+
 def run_query(terms: list[str]):
     query_weights = get_query_weights(terms)
     document_scores = get_document_scores(query_weights)
     relevant_docs = get_relevant_docs(document_scores)
     return relevant_docs
+
 
 # get td-idf of query, cosine normalized
 # return map{ word: tf-idf-normalized }
@@ -108,6 +106,7 @@ def get_query_weights(terms: list[str]) -> dict[str, float]:
 
     return query_weights
 
+
 # get lnc.ltc document scores
 # return map{ doc: score }
 def get_document_scores(query_weights) -> dict[int, float]:
@@ -120,7 +119,7 @@ def get_document_scores(query_weights) -> dict[int, float]:
             document_scores[doc] += get_doc_term_weight(doc, term) * weight
 
     return document_scores
-            
+
 
 # get zone weighted tf of term in doc, cosine normalized
 def get_doc_term_weight(doc, term):
@@ -130,36 +129,43 @@ def get_doc_term_weight(doc, term):
 
     return score
 
+
 # return relevant docs sorted most to least relevant
 def get_relevant_docs(doc_scores):
     relevant = []
     for doc, score in doc_scores.items():
         if score > RELEVANCE_THRESHOLD:
             relevant.append([doc, score])
-            
+
     relevant.sort(key=lambda x: x[1], reverse=True)
-    
+
     return [x[0] for x in relevant]
 
+
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'd:p:q:o:')
+    opts, args = getopt.getopt(sys.argv[1:], "d:p:q:o:")
 except getopt.GetoptError:
     usage()
     sys.exit(2)
 
 for o, a in opts:
-    if o == '-d':
-        dictionary_file  = a
-    elif o == '-p':
+    if o == "-d":
+        dictionary_file = a
+    elif o == "-p":
         postings_file = a
-    elif o == '-q':
+    elif o == "-q":
         file_of_queries = a
-    elif o == '-o':
+    elif o == "-o":
         file_of_output = a
     else:
         assert False, "unhandled option"
 
-if dictionary_file == None or postings_file == None or file_of_queries == None or file_of_output == None :
+if (
+    dictionary_file == None
+    or postings_file == None
+    or file_of_queries == None
+    or file_of_output == None
+):
     usage()
     sys.exit(2)
 
