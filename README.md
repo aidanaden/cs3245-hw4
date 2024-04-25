@@ -4,7 +4,7 @@ Python version: 3.12.0
 
 ### Group:
 
-- A0218327E ()
+- A0218327E (e0544363@u.nus.edu)
 - A0255343H (e0960013@u.nus.edu)
 - A0218135L (e0544171@u.nus.edu)
 
